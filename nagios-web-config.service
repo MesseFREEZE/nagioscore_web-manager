@@ -1,0 +1,18 @@
+[Unit]
+Description=Nagios Web Configuration Manager
+After=network.target nagios.service
+
+[Service]
+Type=simple
+User=nagios
+Group=nagios
+WorkingDirectory=/opt/nagios-web-config
+Environment="PATH=/opt/nagios-web-config/venv/bin"
+Environment="FLASK_APP=app.py"
+Environment="NAGIOS_BASE_PATH=/usr/local/nagios/etc"
+ExecStart=/opt/nagios-web-config/venv/bin/python /opt/nagios-web-config/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

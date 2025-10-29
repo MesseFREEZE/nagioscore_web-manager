@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nagios Host Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #198754;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #0dcaf0;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            padding-top: 70px;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            margin-bottom: 1.5rem;
+        }
+
+        .card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-card {
+            background: linear-gradient(135deg, var(--primary-color), #0056b3);
+            color: white;
+        }
+
+        .stats-card .card-body {
+            padding: 2rem;
+        }
+
+        .stats-number {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-action {
+            margin: 0 0.25rem;
+        }
+
+        .search-box {
+            border-radius: 25px;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .table th {
+            background-color: #f8f9fa;
+            border-top: none;
+        }
+
+        .status-online {
+            color: var(--success-color);
+        }
+
+        .status-offline {
+            color: var(--danger-color);
+        }
+
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        .directory-item {
+            padding: 1rem;
+            border-left: 4px solid var(--primary-color);
+            background: white;
+            margin-bottom: 0.5rem;
+            border-radius: 0.25rem;
+        }
+
+        .directory-item:hover {
+            background: #f8f9fa;
+        }
+
+        .host-detail-row {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .host-detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1050;
+        }
+
+        .form-label-required::after {
+            content: " *";
+            color: var(--danger-color);
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading-spinner.active {
+            display: block;
+        }
+
+        /* Login page styles */
+        #loginPage {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 9999;
+            padding-top: 0;
+        }
+
+        #loginPage.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-card {
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .login-header {
+            background: white;
+            padding: 2rem;
+            text-align: center;
+            border-radius: 0.5rem 0.5rem 0 0;
+        }
+
+        .login-body {
+            background: white;
+            padding: 2rem;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+
+        #appContainer {
+            display: none;
+        }
+
+        #appContainer.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="active">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fas fa-server fa-3x text-primary mb-3"></i>
+                <h2>Nagios Host Manager</h2>
+                <p class="text-muted">Connectez-vous pour continuer</p>
+            </div>
+            <div class="login-body">
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="loginUsername" class="form-label">Nom d'utilisateur</label>
+                        <input type="text" class="form-control" id="loginUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="loginPassword" class="form-label">Mot de passe</label>
+                        <input type="password" class="form-control" id="loginPassword" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-sign-in-alt"></i> Se connecter
+                        </button>
+                    </div>
+                    <div id="loginError" class="alert alert-danger mt-3" style="display: none;"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="appContainer">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#dashboard">
+                    <i class="fas fa-server"></i> Nagios Host Manager
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="#dashboard"><i class="fas fa-home"></i> Tableau de bord</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#hosts"><i class="fas fa-list"></i> Hôtes</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#add"><i class="fas fa-plus"></i> Ajouter</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> Déconnexion
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid">
+            <!-- Toast Container -->
+            <div class="toast-container"></div>
+
+            <!-- Loading Spinner -->
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <p class="mt-2">Chargement des données...</p>
+            </div>
+
+            <!-- Dashboard Section -->
+            <div id="dashboard" class="page-section active">
+                <h2 class="mb-4"><i class="fas fa-home"></i> Tableau de bord</h2>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card stats-card">
+                            <div class="card-body text-center">
+                                <div class="stats-number" id="statsHostCount">0</div>
+                                <h5>Hôtes configurés</h5>
+                                <p class="mb-0">Total des hôtes dans la configuration Nagios</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="card" style="background: linear-gradient(135deg, #198754, #0d5132); color: white;">
+                            <div class="card-body text-center">
+                                <div class="stats-number" id="statsDirCount">0</div>
+                                <h5>Répertoires</h5>
+                                <p class="mb-0">Répertoires de configuration disponibles</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="card" style="background: linear-gradient(135deg, #0dcaf0, #055160); color: white;">
+                            <div class="card-body text-center">
+                                <div class="stats-number" id="statsTemplateCount">5</div>
+                                <h5>Templates</h5>
+                                <p class="mb-0">Templates d'hôtes disponibles</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-folder"></i> Répertoires de configuration</h5>
+                            </div>
+                            <div class="card-body" id="directoriesList">
+                                <p class="text-muted">Chargement des répertoires...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="fas fa-tools"></i> Actions rapides</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-grid gap-2">
+                                    <a href="#hosts" class="btn btn-primary">
+                                        <i class="fas fa-list"></i> Lister les hôtes
+                                    </a>
+                                    <a href="#add" class="btn btn-success">
+                                        <i class="fas fa-plus"></i> Ajouter un hôte
+                                    </a>
+                                    <button class="btn btn-info" onclick="reloadConfig()">
+                                        <i class="fas fa-sync"></i> Recharger la config
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hosts List Section -->
+            <div id="hosts" class="page-section">
+                <h2 class="mb-4"><i class="fas fa-list"></i> Liste des hôtes</h2>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <input type="text" id="searchInput" class="form-control search-box" placeholder="Rechercher un hôte...">
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <a href="#add" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Ajouter un hôte
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nom d'hôte</th>
+                                        <th>Alias</th>
+                                        <th>Adresse IP</th>
+                                        <th>Répertoire</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hostsTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center">Chargement des hôtes...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Host Detail Section -->
+            <div id="detail" class="page-section">
+                <h2 class="mb-4"><i class="fas fa-info-circle"></i> Détails de l'hôte</h2>
+
+                <div class="card">
+                    <div class="card-body" id="hostDetailContent">
+                        <p class="text-muted">Sélectionnez un hôte pour voir les détails</p>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <a href="#hosts" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Retour à la liste</a>
+                    <button class="btn btn-primary" onclick="editCurrentHost()"><i class="fas fa-edit"></i> Éditer</button>
+                </div>
+            </div>
+
+            <!-- Add/Edit Host Section -->
+            <div id="add" class="page-section">
+                <h2 class="mb-4" id="formTitle"><i class="fas fa-plus"></i> Ajouter un hôte</h2>
+
+                <div class="card">
+                    <div class="card-body">
+                        <form id="hostForm">
+                            <input type="hidden" id="editingHostName" value="">
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="host_name" class="form-label form-label-required">Nom d'hôte</label>
+                                    <input type="text" class="form-control" id="host_name" required>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="alias" class="form-label form-label-required">Alias</label>
+                                    <input type="text" class="form-control" id="alias" required>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="address" class="form-label form-label-required">Adresse IP</label>
+                                    <input type="text" class="form-control" id="address" required 
+                                           pattern="^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$">
+                                    <div class="form-text">Format: 192.168.1.1</div>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="directory" class="form-label form-label-required">Répertoire</label>
+                                    <select class="form-select" id="directory" required>
+                                        <option value="">Chargement...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="use" class="form-label">Template (use)</label>
+                                    <select class="form-select" id="use">
+                                        <option value="linux-server">linux-server</option>
+                                        <option value="windows-server">windows-server</option>
+                                        <option value="generic-switch">generic-switch</option>
+                                        <option value="generic-printer">generic-printer</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="check_command" class="form-label">Commande de vérification</label>
+                                    <select class="form-select" id="check_command">
+                                        <option value="check-host-alive">check-host-alive</option>
+                                        <option value="check_ping">check_ping</option>
+                                        <option value="check_ssh">check_ssh</option>
+                                        <option value="check_http">check_http</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="max_check_attempts" class="form-label">Tentatives max</label>
+                                    <input type="number" class="form-control" id="max_check_attempts" value="5">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="check_interval" class="form-label">Intervalle de vérif. (min)</label>
+                                    <input type="number" class="form-control" id="check_interval" value="5">
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="retry_interval" class="form-label">Intervalle de retry (min)</label>
+                                    <input type="number" class="form-control" id="retry_interval" value="1">
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="notification_interval" class="form-label">Intervalle notif. (min)</label>
+                                    <input type="number" class="form-control" id="notification_interval" value="30">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="notification_period" class="form-label">Période de notification</label>
+                                    <select class="form-select" id="notification_period">
+                                        <option value="24x7">24x7</option>
+                                        <option value="workhours">workhours</option>
+                                        <option value="nonworkhours">nonworkhours</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="contacts" class="form-label">Contacts</label>
+                                    <input type="text" class="form-control" id="contacts" value="nagiosadmin">
+                                </div>
+
+                                <div class="col-md-4 mb-3">
+                                    <label for="contact_groups" class="form-label">Groupes de contacts</label>
+                                    <input type="text" class="form-control" id="contact_groups" value="admins">
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save"></i> Enregistrer
+                                </button>
+                                <a href="#hosts" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Annuler
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // État de l'application
+        let appState = {
+            hosts: [],
+            directories: [],
+            currentHostName: null,
+            filteredHosts: [],
+            isAuthenticated: false
+        };
+
+        // Vérifier l'authentification au démarrage
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-auth');
+                const data = await response.json();
+
+                if (data.authenticated) {
+                    appState.isAuthenticated = true;
+                    showApp();
+                    await loadData();
+                } else {
+                    showLogin();
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showLogin();
+            }
+        }
+
+        // Afficher la page de login
+        function showLogin() {
+            document.getElementById('loginPage').classList.add('active');
+            document.getElementById('appContainer').classList.remove('active');
+        }
+
+        // Afficher l'application
+        function showApp() {
+            document.getElementById('loginPage').classList.remove('active');
+            document.getElementById('appContainer').classList.add('active');
+        }
+
+        // Gérer la connexion
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const loginError = document.getElementById('loginError');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    appState.isAuthenticated = true;
+                    showApp();
+                    await loadData();
+                    loginError.style.display = 'none';
+                } else {
+                    loginError.textContent = data.error || 'Identifiants invalides';
+                    loginError.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                loginError.textContent = 'Erreur de connexion au serveur';
+                loginError.style.display = 'block';
+            }
+        });
+
+        // Déconnexion
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                appState.isAuthenticated = false;
+                showLogin();
+                document.getElementById('loginForm').reset();
+            } catch (error) {
+                console.error('Erreur:', error);
+            }
+        }
+
+        // Fonction pour afficher un toast
+        function showToast(message, type = 'success') {
+            const toastContainer = document.querySelector('.toast-container');
+            const toastId = 'toast-' + Date.now();
+
+            const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+        }
+
+        // Charger toutes les données
+        async function loadData() {
+            const spinner = document.getElementById('loadingSpinner');
+            spinner.classList.add('active');
+
+            await loadHosts();
+            await loadDirectories();
+
+            spinner.classList.remove('active');
+        }
+
+        // Charger les hôtes depuis l'API
+        async function loadHosts() {
+            try {
+                const response = await fetch('/api/hosts');
+                const data = await response.json();
+
+                if (data.success) {
+                    appState.hosts = data.hosts || [];
+                    appState.filteredHosts = appState.hosts;
+                    updateDashboard();
+                    renderHostsTable();
+                } else {
+                    showToast('Erreur lors du chargement des hôtes: ' + (data.error || 'Erreur inconnue'), 'error');
+                    appState.hosts = [];
+                    appState.filteredHosts = [];
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showToast('Erreur de connexion au serveur', 'error');
+                appState.hosts = [];
+                appState.filteredHosts = [];
+            }
+        }
+
+        // Charger les répertoires depuis l'API
+        async function loadDirectories() {
+            try {
+                const response = await fetch('/api/directories');
+                const data = await response.json();
+
+                if (data.success) {
+                    appState.directories = data.directories || [];
+                    updateDirectoriesDropdown();
+                    updateDirectoriesList();
+                } else {
+                    showToast('Erreur lors du chargement des répertoires: ' + (data.error || 'Erreur inconnue'), 'error');
+                    appState.directories = [];
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showToast('Erreur de connexion au serveur', 'error');
+                appState.directories = [];
+            }
+        }
+
+        // Mettre à jour le dashboard
+        function updateDashboard() {
+            document.getElementById('statsHostCount').textContent = appState.hosts.length;
+            document.getElementById('statsDirCount').textContent = appState.directories.length;
+        }
+
+        // Mettre à jour la liste des répertoires sur le dashboard
+        function updateDirectoriesList() {
+            const dirList = document.getElementById('directoriesList');
+
+            if (appState.directories.length === 0) {
+                dirList.innerHTML = '<p class="text-muted">Aucun répertoire trouvé</p>';
+                return;
+            }
+
+            const hostsByDir = {};
+            appState.hosts.forEach(host => {
+                const dir = host.directory || 'Non défini';
+                hostsByDir[dir] = (hostsByDir[dir] || 0) + 1;
+            });
+
+            let html = '';
+            appState.directories.forEach(dir => {
+                const count = hostsByDir[dir] || 0;
+                html += `
+                    <div class="directory-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-folder text-primary"></i>
+                                <strong class="ms-2">${dir}</strong>
+                            </div>
+                            <span class="badge bg-primary">${count} hôte${count !== 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            dirList.innerHTML = html;
+        }
+
+        // Mettre à jour le dropdown des répertoires dans le formulaire
+        function updateDirectoriesDropdown() {
+            const dirSelect = document.getElementById('directory');
+
+            if (appState.directories.length === 0) {
+                dirSelect.innerHTML = '<option value="">Aucun répertoire disponible</option>';
+                return;
+            }
+
+            dirSelect.innerHTML = appState.directories.map(dir => 
+                `<option value="${dir}">${dir}</option>`
+            ).join('');
+        }
+
+        // Rendre le tableau des hôtes
+        function renderHostsTable() {
+            const tbody = document.getElementById('hostsTableBody');
+
+            if (appState.filteredHosts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Aucun hôte trouvé</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = appState.filteredHosts.map(host => `
+                <tr>
+                    <td>${host.host_name || '-'}</td>
+                    <td>${host.alias || '-'}</td>
+                    <td>${host.address || '-'}</td>
+                    <td><small>${host.directory || '-'}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-info btn-action" onclick="viewHost('${host.host_name}')">
+                            <i class="fas fa-eye"></i> Voir
+                        </button>
+                        <button class="btn btn-sm btn-primary btn-action" onclick="editHost('${host.host_name}')">
+                            <i class="fas fa-edit"></i> Éditer
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteHost('${host.host_name}')">
+                            <i class="fas fa-trash"></i> Supprimer
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Rechercher dans la liste des hôtes
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    appState.filteredHosts = appState.hosts.filter(host => 
+                        (host.host_name || '').toLowerCase().includes(searchTerm) ||
+                        (host.alias || '').toLowerCase().includes(searchTerm) ||
+                        (host.address || '').toLowerCase().includes(searchTerm)
+                    );
+                    renderHostsTable();
+                });
+            }
+        });
+
+        // Voir les détails d'un hôte
+        function viewHost(hostName) {
+            const host = appState.hosts.find(h => h.host_name === hostName);
+            if (!host) {
+                showToast('Hôte introuvable', 'error');
+                return;
+            }
+
+            appState.currentHostName = hostName;
+
+            const detailContent = document.getElementById('hostDetailContent');
+            detailContent.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="host-detail-row">
+                            <strong>Nom d'hôte:</strong> ${host.host_name || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Alias:</strong> ${host.alias || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Adresse IP:</strong> ${host.address || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Répertoire:</strong> ${host.directory || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Fichier:</strong> ${host.file_path || '-'}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="host-detail-row">
+                            <strong>Template (use):</strong> ${host.use || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Commande:</strong> ${host.check_command || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Tentatives max:</strong> ${host.max_check_attempts || '-'}
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Intervalle vérif.:</strong> ${host.check_interval || '-'} min
+                        </div>
+                        <div class="host-detail-row">
+                            <strong>Contacts:</strong> ${host.contacts || '-'}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            window.location.hash = 'detail';
+        }
+
+        // Éditer un hôte
+        function editHost(hostName) {
+            const host = appState.hosts.find(h => h.host_name === hostName);
+            if (!host) {
+                showToast('Hôte introuvable', 'error');
+                return;
+            }
+
+            document.getElementById('editingHostName').value = hostName;
+            document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit"></i> Éditer un hôte';
+
+            document.getElementById('host_name').value = host.host_name || '';
+            document.getElementById('alias').value = host.alias || '';
+            document.getElementById('address').value = host.address || '';
+            document.getElementById('directory').value = host.directory || '';
+            document.getElementById('use').value = host.use || 'linux-server';
+            document.getElementById('check_command').value = host.check_command || 'check-host-alive';
+            document.getElementById('max_check_attempts').value = host.max_check_attempts || '5';
+            document.getElementById('check_interval').value = host.check_interval || '5';
+            document.getElementById('retry_interval').value = host.retry_interval || '1';
+            document.getElementById('notification_interval').value = host.notification_interval || '30';
+            document.getElementById('notification_period').value = host.notification_period || '24x7';
+            document.getElementById('contacts').value = host.contacts || 'nagiosadmin';
+            document.getElementById('contact_groups').value = host.contact_groups || 'admins';
+
+            window.location.hash = 'add';
+        }
+
+        // Éditer l'hôte courant
+        function editCurrentHost() {
+            if (appState.currentHostName) {
+                editHost(appState.currentHostName);
+            }
+        }
+
+        // Supprimer un hôte
+        async function deleteHost(hostName) {
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer l'hôte "${hostName}" ?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/hosts/${hostName}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Hôte supprimé avec succès');
+                    await loadHosts();
+                    window.location.hash = 'hosts';
+                } else {
+                    showToast('Erreur: ' + (data.error || 'Erreur inconnue'), 'error');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showToast('Erreur de connexion au serveur', 'error');
+            }
+        }
+
+        // Soumettre le formulaire
+        document.getElementById('hostForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const editingHostName = document.getElementById('editingHostName').value;
+            const isEditing = editingHostName !== '';
+
+            const hostData = {
+                host_name: document.getElementById('host_name').value,
+                alias: document.getElementById('alias').value,
+                address: document.getElementById('address').value,
+                use: document.getElementById('use').value,
+                check_command: document.getElementById('check_command').value,
+                max_check_attempts: document.getElementById('max_check_attempts').value,
+                check_interval: document.getElementById('check_interval').value,
+                retry_interval: document.getElementById('retry_interval').value,
+                notification_interval: document.getElementById('notification_interval').value,
+                notification_period: document.getElementById('notification_period').value,
+                contacts: document.getElementById('contacts').value,
+                contact_groups: document.getElementById('contact_groups').value
+            };
+
+            const directory = document.getElementById('directory').value;
+
+            try {
+                let response;
+                if (isEditing) {
+                    response = await fetch(`/api/hosts/${editingHostName}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ host: hostData })
+                    });
+                } else {
+                    response = await fetch('/api/hosts', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            host: hostData,
+                            directory: directory
+                        })
+                    });
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || (isEditing ? 'Hôte mis à jour avec succès' : 'Hôte créé avec succès'));
+                    await loadHosts();
+                    resetForm();
+                    window.location.hash = 'hosts';
+                } else {
+                    showToast('Erreur: ' + (data.error || 'Erreur inconnue'), 'error');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                showToast('Erreur de connexion au serveur', 'error');
+            }
+        });
+
+        // Réinitialiser le formulaire
+        function resetForm() {
+            document.getElementById('hostForm').reset();
+            document.getElementById('editingHostName').value = '';
+            document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus"></i> Ajouter un hôte';
+        }
+
+        // Recharger la configuration
+        async function reloadConfig() {
+            const spinner = document.getElementById('loadingSpinner');
+            spinner.classList.add('active');
+
+            await loadHosts();
+            await loadDirectories();
+
+            spinner.classList.remove('active');
+            showToast('Configuration rechargée');
+        }
+
+        // Navigation par hash
+        function handleHashChange() {
+            const hash = window.location.hash.slice(1) || 'dashboard';
+
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            const targetSection = document.getElementById(hash);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            } else {
+                document.getElementById('dashboard').classList.add('active');
+            }
+
+            if (hash === 'add' && !document.getElementById('editingHostName').value) {
+                resetForm();
+            }
+        }
+
+        window.addEventListener('hashchange', handleHashChange);
+
+        // Initialisation au chargement de la page
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            handleHashChange();
+        });
+    </script>
+</body>
+</html>
